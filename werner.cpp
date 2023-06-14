@@ -221,7 +221,7 @@ int main(int argc, char const *argv[]) {
   //
 
   const size_t n_per_step = 10*nx*ny;
-  const size_t max_steps = 1000;
+  const size_t max_steps = 5000;
 
   for (size_t step=0; step<max_steps; ++step) {
     std::cout << "\ntime step " << step << "\n";
@@ -229,9 +229,9 @@ int main(int argc, char const *argv[]) {
     // move many sand grains
     for (size_t ipt=0; ipt<n_per_step; ++ipt) {
 
-      const bool debug = (ipt % 1000000 == 0);
+      //const bool debug = (ipt % 1000000 == 0);
       //const bool debug = true;
-      if (debug) std::cout << "  saltating grain " << ipt << "\n";
+      bool debug = false;
 
       // find a seed point
       int32_t px,py;
@@ -242,20 +242,23 @@ int main(int argc, char const *argv[]) {
         //std::cout << "    checking " << px << " " << py << " for sand\n";
         if (sand(px,py) > ground(px,py)) no_sand = false;
       }
+      //if (py==0 and ipt % 10000 == 0) debug = true;
+      if (debug) std::cout << "  saltating grain " << ipt << "\n";
       if (debug) std::cout << "    moving sand from " << px << " " << py << "\n";
 
       // pick it up
       sand(px,py) -= 1;
 
       // lower the shadow map if necessary
-      if (sand(px,py)+1 == shadow(px,py)) {
+      int32_t sx = px;
+      if (sand(sx,py)+1 == shadow(sx,py)) {
         // yes, we were the cell casting the shadow (or were exactly on it)
         if (debug) std::cout << "    lowering shadow\n";
-        int32_t shadow_height = sand(px,py);
-        while (shadow_height >= sand(px,py)) {
-          shadow(px,py) = shadow_height;
+        int32_t shadow_height = sand(sx,py);
+        while (shadow_height >= sand(sx,py)) {
+          shadow(sx,py) = shadow_height;
           shadow_height -= ashade;
-          px = (px + 1) % nx;
+          sx = (sx + 1 + nx) % nx;
         }
         //if (debug and shadow_length > 0) std::cout << "    casts shadow " << shadow_length << "\n";
       }
@@ -264,7 +267,7 @@ int main(int argc, char const *argv[]) {
       bool keep_moving = true;
       while (keep_moving) {
         // eventually have random variation of the hop distance
-        px = (px + ld) % nx;
+        px = (px + ld + nx) % nx;
         if (debug) std::cout << "    at " << px << " " << py << " ground=" << ground(px,py) << " sand=" << sand(px,py) << " shadow=" << shadow(px,py) << "\n";
 
         // main sticking logic is here!
@@ -289,9 +292,9 @@ int main(int argc, char const *argv[]) {
       while (keep_slumping) {
         int32_t lowest_slope = 0;
         for (int32_t i=px-1; i<px+2; ++i) {
-          const int32_t tx = i % nx;
+          const int32_t tx = (i+nx) % nx;
           for (int32_t j=py-1; j<py+2; ++j) {
-            const int32_t ty = j % ny;
+            const int32_t ty = (j+ny) % ny;
             const int32_t slope = sand(tx,ty) - sand(px,py);
             if (slope < lowest_slope) {
               lowx = tx;
@@ -321,7 +324,7 @@ int main(int argc, char const *argv[]) {
         shadow(px,py) = shadow_height;
         shadow_height -= ashade;
         shadow_length++;
-        px = (px + 1) % nx;
+        px = (px + 1 + nx) % nx;
       }
       if (debug and shadow_length > 0) std::cout << "    casts shadow " << shadow_length << "\n";
 
@@ -338,6 +341,22 @@ int main(int argc, char const *argv[]) {
 
       float** data = allocate_2d_array_f((int)nx, (int)ny);
       for (size_t i=0; i<nx; ++i) for (size_t j=0; j<ny; ++j) data[i][j] = sand(i,j) / (float)300.0;
+
+      (void) write_png (outfile, (int)nx, (int)ny, FALSE, TRUE,
+                        data, 0.0, 1.0, nullptr, 0.0, 1.0, nullptr, 0.0, 1.0);
+
+      free_2d_array_f(data);
+    }
+
+    // write out shadow map?
+    if (false) {
+      char outfile[255];
+      sprintf(outfile, "shadow_%04d.png", step);
+
+      std::cout << "\nWriting shadow map to " << outfile << std::endl;
+
+      float** data = allocate_2d_array_f((int)nx, (int)ny);
+      for (size_t i=0; i<nx; ++i) for (size_t j=0; j<ny; ++j) data[i][j] = shadow(i,j) / (float)300.0;
 
       (void) write_png (outfile, (int)nx, (int)ny, FALSE, TRUE,
                         data, 0.0, 1.0, nullptr, 0.0, 1.0, nullptr, 0.0, 1.0);
