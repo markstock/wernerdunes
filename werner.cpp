@@ -210,10 +210,10 @@ int main(int argc, char const *argv[]) {
     rng.seed(rseed);
   }
   // use these to select a random point in the array
-  std::uniform_int_distribution<std::mt19937::result_type> xrand(0,nx-1);
-  std::uniform_int_distribution<std::mt19937::result_type> yrand(0,ny-1);
+  std::uniform_int_distribution<int32_t> xrand(0,nx-1);
+  std::uniform_int_distribution<int32_t> yrand(0,ny-1);
   // and use this for probability checks
-  std::uniform_real_distribution<> prob(0.0, 1.0);
+  std::uniform_real_distribution<float> prob(0.0, 1.0);
 
 
   //
