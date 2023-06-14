@@ -2,7 +2,7 @@
 Application of Werner's algorithm to modeling of wind-blown dunes
 
 ## Build and run
-With GCC and libpng installed on a Linux machine, this should be as simple as
+With GCC, Eigen3, and libpng installed on a Linux machine, this should be as simple as
 
 	make
 	./werner.bin -o out
@@ -11,4 +11,4 @@ With GCC and libpng installed on a Linux machine, this should be as simple as
 
 
 ## Thanks
-CLI11, libpng, also see https://github.com/ebgoldstein/wDune95
+Eigen, CLI11, libpng, also see https://github.com/ebgoldstein/wDune95
