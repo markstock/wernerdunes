@@ -117,6 +117,8 @@ int main(int argc, char const *argv[]) {
 
   } else {
     // read a png to get the elevation
+    std::cout << "Reading elevations from file\n";
+
     // check the resolution first
     int hgt, wdt;
     (void) read_png_res (demfile.c_str(), &hgt, &wdt);
@@ -144,8 +146,11 @@ int main(int argc, char const *argv[]) {
     std::cout << "Setting sand to constant value (flat)\n";
 
     sand.resize(nx,ny);
-    sand.setZero();
-    for (size_t i=0; i<nx; ++i) for (size_t j=0; j<ny; ++j) sand(i,j) = 10*vscale;
+    // add uniform sand later to ground elevation
+    sand = ground;
+    for (size_t i=0; i<nx; ++i) for (size_t j=0; j<ny; ++j) sand(i,j) += 10*vscale;
+
+    // alternative: fill with sand up to given elevation
 
   } else {
     // check the resolution first
@@ -222,6 +227,27 @@ int main(int argc, char const *argv[]) {
 
   for (size_t step=0; step<max_steps; ++step) {
     std::cout << "\ntime step " << step << "\n";
+
+    if (false and step % 100 == 0) {
+      std::cout << "\nrotating!!!\n";
+      ground.transposeInPlace();
+      sand.transposeInPlace();
+
+      // re-calculate the shadow map
+      shadow = sand;
+      // now march over the input (left) edge, as flow moves to the right
+      for (int32_t j=0; j<ny; ++j) {
+        const int32_t ty = j % ny;
+        int32_t shadow_height = sand(0,ty);
+        // go across the field twice because we are periodic, and shadows may cross the boundary
+        for (int32_t i=1; i<2*nx; ++i) {
+          const int32_t tx = i % nx;
+          shadow_height -= ashade;
+          shadow_height = std::max(shadow_height, sand(tx,ty));
+          shadow(tx,ty) = shadow_height;
+        }
+      }
+    }
 
     // move many sand grains
     for (size_t ipt=0; ipt<n_per_step; ++ipt) {
