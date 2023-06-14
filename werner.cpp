@@ -10,11 +10,8 @@
 #include <Eigen/Core>
 
 #include <cassert>
-#include <limits>
-#include <cmath>
+#include <array>
 #include <iostream>
-#include <fstream>
-#include <sstream>
 #include <string>
 #include <random>
 
@@ -139,16 +136,8 @@ int main(int argc, char const *argv[]) {
     free_2d_array_f(data);
   }
 
-  // write out corners of matrix
-  //std::cout << "Top left corner of elevation matrix:" << std::endl;
-  //std::cout << ground.block(0,0,6,6) << std::endl;
-  //std::cout << std::endl;
-  //std::cout << "Bottom right corner of elevation matrix:" << std::endl;
-  //std::cout << ground.block(nx-6,ny-6,6,6) << std::endl;
 
-
-  // another matrix which would increase the cost of traversal
-  // this could be used for rivers, woods, etc.
+  // matrix giving the height of sand - OR - the height of ground if no sand
   Eigen::Matrix<int32_t, Eigen::Dynamic, Eigen::Dynamic> sand;
 
   if (sandfile.empty() or sandfile == "uniform") {
@@ -215,6 +204,14 @@ int main(int argc, char const *argv[]) {
   // and use this for probability checks
   std::uniform_real_distribution<float> prob(0.0, 1.0);
 
+  // useful arrays for checking 8 neighbors
+  // first, the relative coordinates
+  const std::array<int32_t,8> di({1, 1, 0, -1, -1, -1, 0, 1});
+  const std::array<int32_t,8> dj({0, 1, 1, 1, 0, -1, -1, -1});
+  // then the factor to multiply the height difference with
+  const std::array<int32_t,8> ds({3, 2, 3, 2, 3, 2, 3, 2});
+  const int32_t scaled_aor = -3 * aor;
+
 
   //
   // loop over all given start points
@@ -229,9 +226,9 @@ int main(int argc, char const *argv[]) {
     // move many sand grains
     for (size_t ipt=0; ipt<n_per_step; ++ipt) {
 
-      //const bool debug = (ipt % 1000000 == 0);
+      const bool debug = (ipt % 3000000 == 0);
       //const bool debug = true;
-      bool debug = false;
+      //bool debug = false;
 
       // find a seed point
       int32_t px,py;
@@ -291,20 +288,20 @@ int main(int argc, char const *argv[]) {
       // repeat the slump operation until it can't move any more
       while (keep_slumping) {
         int32_t lowest_slope = 0;
-        for (int32_t i=px-1; i<px+2; ++i) {
-          const int32_t tx = (i+nx) % nx;
-          for (int32_t j=py-1; j<py+2; ++j) {
-            const int32_t ty = (j+ny) % ny;
-            const int32_t slope = sand(tx,ty) - sand(px,py);
-            if (slope < lowest_slope) {
-              lowx = tx;
-              lowy = ty;
-              lowest_slope = slope;
-            }
+
+        for (int32_t i=0; i<8; ++i) {
+          const int32_t tx = (px+di[i]+nx) % nx;
+          const int32_t ty = (py+dj[i]+ny) % ny;
+          const int32_t slope = ds[i] * (sand(tx,ty) - sand(px,py));
+
+          if (slope < lowest_slope) {
+            lowx = tx;
+            lowy = ty;
+            lowest_slope = slope;
           }
         }
         if (debug) std::cout << "    lowest slope is " << lowest_slope << "\n";
-        if (lowest_slope < -aor) {
+        if (lowest_slope < scaled_aor) {
           px = lowx;
           py = lowy;
           if (debug) std::cout << "    slumps to " << px << " " << py << "\n";
