@@ -3,7 +3,7 @@ CXX=g++
 #DEBUG=-g -ggdb -O0
 DEBUG=-Ofast
 CFLAGS=-std=c99
-CXXFLAGS=-std=c++11
+CXXFLAGS=-std=c++11 -fopenmp
 INC=-I/usr/include/eigen3
 OBJS=inout.o werner.o
 EXE=werner.bin

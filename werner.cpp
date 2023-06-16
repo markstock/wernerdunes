@@ -53,6 +53,9 @@ int main(int argc, char const *argv[]) {
   int32_t ashade = 2;
   app.add_option("-d,--shadow", ld, "shadow angle in steps, >=1");
 
+  size_t max_steps = 1000;
+  app.add_option("--steps", max_steps, "maximum number of output steps");
+
   // random seed, if not set
   uint32_t rseed = 12345;
   app.add_option("--seed", rseed, "random seed, program will use noise generator if this is not set");
@@ -196,19 +199,6 @@ int main(int argc, char const *argv[]) {
   }
 
 
-  // use random device
-  std::random_device dev;
-  std::mt19937 rng(dev());
-  // or use seed, if given
-  if (app.count("--seed") > 0) {
-    rng.seed(rseed);
-  }
-  // use these to select a random point in the array
-  std::uniform_int_distribution<int32_t> xrand(0,nx-1);
-  std::uniform_int_distribution<int32_t> yrand(0,ny-1);
-  // and use this for probability checks
-  std::uniform_real_distribution<float> prob(0.0, 1.0);
-
   // useful arrays for checking 8 neighbors
   // first, the relative coordinates
   const std::array<int32_t,8> di({1, 1, 0, -1, -1, -1, 0, 1});
@@ -223,7 +213,6 @@ int main(int argc, char const *argv[]) {
   //
 
   const size_t n_per_step = 10*nx*ny;
-  const size_t max_steps = 5000;
 
   for (size_t step=0; step<max_steps; ++step) {
     std::cout << "\ntime step " << step << "\n";
@@ -250,6 +239,24 @@ int main(int argc, char const *argv[]) {
     }
 
     // move many sand grains
+    #pragma omp parallel
+    {
+
+    // random generator needs to be per-thread or else lots of contention destroys parallelism
+    // use random device
+    std::random_device dev;
+    std::mt19937 rng(dev());
+    // or use seed, if given
+    if (app.count("--seed") > 0) {
+      rng.seed(rseed);
+    }
+    // use these to select a random point in the array
+    std::uniform_int_distribution<int32_t> xrand(0,nx-1);
+    std::uniform_int_distribution<int32_t> yrand(0,ny-1);
+    // and use this for probability checks
+    std::uniform_real_distribution<float> prob(0.0, 1.0);
+
+    #pragma omp for schedule(guided)
     for (size_t ipt=0; ipt<n_per_step; ++ipt) {
 
       const bool debug = (ipt % 3000000 == 0);
@@ -259,6 +266,9 @@ int main(int argc, char const *argv[]) {
       // find a seed point
       int32_t px,py;
       bool no_sand = true;
+      // ensure no other thread grabs the same cell - nope
+      //#pragma omp critical
+      {
       while (no_sand) {
         px = xrand(rng);
         py = yrand(rng);
@@ -270,7 +280,9 @@ int main(int argc, char const *argv[]) {
       if (debug) std::cout << "    moving sand from " << px << " " << py << "\n";
 
       // pick it up
+      #pragma omp atomic update
       sand(px,py) -= 1;
+      }
 
       // lower the shadow map if necessary
       int32_t sx = px;
@@ -279,6 +291,7 @@ int main(int argc, char const *argv[]) {
         if (debug) std::cout << "    lowering shadow\n";
         int32_t shadow_height = sand(sx,py);
         while (shadow_height >= sand(sx,py)) {
+          #pragma omp atomic write
           shadow(sx,py) = shadow_height;
           shadow_height -= ashade;
           sx = (sx + 1 + nx) % nx;
@@ -338,12 +351,14 @@ int main(int argc, char const *argv[]) {
       }
 
       // here's a final resting place
+      #pragma omp atomic update
       sand(px,py) += 1;
 
       // update the shadow map now
       int32_t shadow_length = 0;
       int32_t shadow_height = sand(px,py);
       while (shadow_height > shadow(px,py)) {
+        #pragma omp atomic write
         shadow(px,py) = shadow_height;
         shadow_height -= ashade;
         shadow_length++;
@@ -352,6 +367,8 @@ int main(int argc, char const *argv[]) {
       if (debug and shadow_length > 0) std::cout << "    casts shadow " << shadow_length << "\n";
 
     } // loop over test points
+
+    } // end omp parallel
 
     //
     // write out the sand elevation matrix as a png
